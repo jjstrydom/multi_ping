@@ -8,6 +8,7 @@ import time
 
 
 async def ping(host):
+    t = time.perf_counter()
     try:
         response = subprocess.check_output(
             ['ping', '-c', '1', f'{host}'],
@@ -15,11 +16,12 @@ async def ping(host):
         )
     except subprocess.CalledProcessError:
         response = None
-    await asyncio.sleep(0.1)
+    duration = time.perf_counter() - t
+    await asyncio.sleep(1 - duration)
     return response
 
 async def produce(name: int, ip: str, q: asyncio.Queue) -> None:
-    for k in range(10):
+    while True:
         r = await ping(ip)
         t = time.perf_counter()
         await q.put((r, t))
@@ -38,8 +40,8 @@ async def consume(name: int, q: asyncio.Queue) -> None:
 async def main(ips: list[str]):
     q = asyncio.Queue()
     ncon = len(ips)
-    producers = [asyncio.create_task(produce(n, ip, q)) for n, ip in enumerate(ips)]
     consumers = [asyncio.create_task(consume(n, q)) for n in range(ncon)]
+    producers = [asyncio.create_task(produce(n, ip, q)) for n, ip in enumerate(ips)]
     await asyncio.gather(*producers)
     await q.join()  # Implicitly awaits consumers, too
     for c in consumers:
